@@ -66,14 +66,13 @@ NODE* getNode(char *nodeLocation, NODE* startingLocation){
 
     strtok(curDirectory, "/");
 
-    printf("Result: %s, %s\n", curDirectory, nodeLocation);
-
 
     if (strcmp(nodeLocation, curDirectory) != 0) {
-        startingLocation = getSibling(startingLocation->child, curDirectory);
-        if(startingLocation != 0) {
-            return getNode(nodeLocation + strlen(curDirectory) + 1, startingLocation);
+        NODE* nextDirectory = getSibling(startingLocation->child, curDirectory);
+        if(nextDirectory != 0) {
+            return getNode(nodeLocation + strlen(curDirectory) + 1, nextDirectory);
         } else {
+            printf("Search for directory %s in %s failed\n", curDirectory, startingLocation);
             return 0;
         }
     } else {

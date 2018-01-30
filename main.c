@@ -54,8 +54,14 @@ NODE* makeChild(NODE *parent, char *name, char type){
     NODE *thisChild = parent->child, *lastChild = parent->child;
 
     while(thisChild){
+        if(strcmp(thisChild->name, name) == 0){
+            printf("Could not make %s in %s. %s already exists in directory\n", name, parent->name, name);
+            return 0;
+        }
+
         lastChild = thisChild;
         thisChild = thisChild->sibling;
+
     }
 
     NODE* newNode = (NODE *) malloc(sizeof(NODE));

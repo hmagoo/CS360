@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <memory.h>
+#include <string.h>
 
 typedef struct NODE{
     char name[64];
@@ -16,6 +16,38 @@ NODE *root, *cwd;
 char line[128]; //User input line
 char command[16], pathname[64]; //user inputs
 char dirname[64], basename[64]; //string holders
+
+int splitLast(){
+    if(strcmp(pathname, "\0") != 0) {
+        char *result, *previousResult;
+        strcpy(dirname, pathname);
+        result = strtok(pathname, "/");
+
+        while (result != NULL) {
+            previousResult = result;
+            result = strtok(NULL, "/");
+        }
+
+        if (previousResult == pathname) {
+            dirname[0] = '\0';
+        } else {
+            //trim trailing '/'
+            dirname[(previousResult - pathname - 1) / sizeof(char)] = '\0';
+
+            //re-add the '/' if that was the only directory specified
+            if(strcmp(dirname, "\0") == 0){
+                dirname[0] = '/';
+                dirname[1] = '\0';
+            }
+        }
+
+        strcpy(basename, previousResult);
+
+        printf("dirname: %s, basename:%s\n", dirname, basename);
+    } else {
+        printf("No parameters supplied for your call\n");
+    }
+}
 
 NODE* makeChild(NODE *parent, char *name, char type){
 
@@ -55,40 +87,48 @@ NODE* getSibling(NODE *child, char *name){
     }
 }
 
-NODE* getNode(char *nodeLocation, NODE* startingLocation){
+NODE* getNode(char nodeLocation[64], NODE* startingLocation){
     if(nodeLocation[0] == '/') {
         startingLocation = root;
         nodeLocation++;
     }
 
-    char curDirectory[64];
-    strcpy(curDirectory, nodeLocation);
+    char *curDirectory = strtok(nodeLocation, "/");
 
-    strtok(curDirectory, "/");
-
-
-    if (strcmp(nodeLocation, curDirectory) != 0) {
-        NODE* nextDirectory = getSibling(startingLocation->child, curDirectory);
-        if(nextDirectory != 0) {
-            return getNode(nodeLocation + strlen(curDirectory) + 1, nextDirectory);
+    while(curDirectory) {
+        if (strcmp(curDirectory, "..") == 0) {
+            startingLocation = startingLocation->parent;
         } else {
-            printf("Search for directory %s in %s failed\n", curDirectory, startingLocation);
-            return 0;
+            NODE* tmp = getSibling(startingLocation->child, curDirectory);
+            if(tmp == 0){
+                printf("Search for directory %s in %s failed\n", curDirectory, startingLocation->name);
+                return 0;
+            } else {
+                startingLocation = tmp;
+            }
         }
-    } else {
-        strcpy(pathname, nodeLocation);
-        return startingLocation;
+
+        curDirectory = strtok(NULL, "/");
     }
 
+    return startingLocation;
 }
 
 int mkdir(){
-    NODE *workingNode = getNode(pathname, cwd);
+    splitLast();
+    NODE *workingNode = getNode(dirname, cwd);
     if(workingNode && workingNode->type == 'D'){
-        makeChild(workingNode, pathname,'D');
+        makeChild(workingNode, basename,'D');
     }
 
 
+}
+
+int cd(){
+    NODE* newNode = getNode(pathname, cwd);
+    if(newNode){
+        cwd = newNode;
+    }
 }
 
 int main(){
@@ -102,6 +142,9 @@ int main(){
 
     cwd = root;
 
+    strcpy(pathname, "\0");
+
+
     do{
         printf("Enter a command: ");
         fgets(line, 128, stdin);
@@ -109,9 +152,9 @@ int main(){
 
         if(strcmp(command, "mkdir") == 0){
             mkdir(pathname);
+        } else if(strcmp(command, "cd") == 0){
+            cd(pathname);
         }
-
-        //getNode(command);
 
         command[0] = '\0';
         pathname[0] = '\0';

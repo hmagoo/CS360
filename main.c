@@ -19,7 +19,7 @@ char dirname[64], basename[64]; //string holders
 
 int splitLast(){
     if(strcmp(pathname, "\0") != 0) {
-        char *result, *previousResult;
+        char *result, *previousResult = 0;
         strcpy(dirname, pathname);
         result = strtok(pathname, "/");
 
@@ -28,30 +28,51 @@ int splitLast(){
             result = strtok(NULL, "/");
         }
 
-        if (previousResult == pathname) {
-            dirname[0] = '\0';
-        } else {
-            //trim trailing '/'
-            dirname[(previousResult - pathname - 1) / sizeof(char)] = '\0';
+        //check if previousResult exists otherwise nothing was specified and set dirname and basename to nothing
+        if(previousResult) {
 
-            //re-add the '/' if that was the only directory specified
-            if(strcmp(dirname, "\0") == 0){
-                dirname[0] = '/';
-                dirname[1] = '\0';
+            if (previousResult == pathname) {
+                dirname[0] = '\0';
+            } else {
+
+                //trim trailing '/'
+                dirname[(previousResult - pathname - 1) / sizeof(char)] = '\0';
+
+                //re-add the '/' if that was the only directory specified
+                if (strcmp(dirname, "\0") == 0) {
+                    dirname[0] = '/';
+                    dirname[1] = '\0';
+                }
+
+
             }
-        }
 
-        strcpy(basename, previousResult);
+            strcpy(basename, previousResult);
+        } else {
+            dirname[0] = '\0';
+            basename[0] = '\0';
+        }
 
         printf("dirname: %s, basename:%s\n", dirname, basename);
     } else {
-        printf("No parameters supplied for your call\n");
+        printf("dirname: \"\", basename: \"\"\n");
     }
 }
 
 NODE* makeChild(NODE *parent, char *name, char type){
 
     NODE *thisChild = parent->child, *lastChild = parent->child;
+
+    if(name == 0 || *name == '\0'){
+        char *typeString = type;
+        if(type == 'D'){
+            typeString = "directory";
+        } else if (type == 'F'){
+            typeString = "file";
+        }
+        printf("Could not make %s, no name was specified\n", typeString);
+        return 0;
+    }
 
     while(thisChild){
         if(strcmp(thisChild->name, name) == 0){
@@ -139,7 +160,7 @@ void rmdir(){
     NODE *toRemove = getNode(pathname, cwd);
     if(toRemove){
         if(toRemove->type == 'D'){
-            rmdir(toRemove);
+            removeNode(toRemove);
         } else {
             printf("Could not remove %s, it is NOT a directory\n", toRemove->name);
         }
@@ -174,18 +195,22 @@ NODE* getOlderSibling(NODE *youngerNode){
 void removeNode(NODE *toRemove){
     if(strcmp(toRemove->name, "/") != 0) {
         if(toRemove != cwd) {
-            NODE *olderSibling = getOlderSibling(toRemove);
-            if (olderSibling) {
-                olderSibling->sibling = toRemove->sibling;
-                free(toRemove);
+            if(isEmpty(toRemove)) {
+                NODE *olderSibling = getOlderSibling(toRemove);
+                if (olderSibling) {
+                    olderSibling->sibling = toRemove->sibling;
+                    free(toRemove);
+                } else {
+                    toRemove->parent->child = toRemove->sibling;
+                }
             } else {
-                toRemove->parent->child = toRemove->sibling;
+                printf("Could not remove %s, it is non empty\n", toRemove->name);
             }
         } else {
-            printf("Cannot remove %s, it is the current working directory", toRemove);
+            printf("Cannot remove %s, it is the current working directory\n", toRemove);
         }
     } else {
-        printf("Unable to remove root");
+        printf("Unable to remove root\n");
     }
 }
 
@@ -195,7 +220,7 @@ void rm(){
         if(toRemove->type == 'F'){
             removeNode(toRemove);
         } else {
-            printf("Could not remove %s, it is a Directory", toRemove->name);
+            printf("Could not remove %s, it is a Directory\n", toRemove->name);
         }
     }
 }
@@ -236,9 +261,102 @@ void ls(){
     }
 }
 
+void pwdHelper(NODE *directory){
+    if(strcmp(directory->name, "/") == 0){
+        printf("/");
+    } else {
+        pwdHelper(directory->parent);
+        printf("%s/", directory->name);
+    }
+}
+
 void pwd(){
+    pwdHelper(cwd);
+    printf("\n");
+}
+
+void savePath(NODE *curNode, FILE *file){
+    if(curNode->name == "/"){
+        fputc('/', file);
+    } else {
+        savePath(curNode->parent, file);
+        fputs(curNode->name, file);
+        fputc('/', file);
+    }
+}
+
+void saveHelper(NODE *curNode, FILE *file, char path[128]){
+    if(curNode) {
+        fputc(curNode->type, file);
+        fputc(' ', file);
+        fputs(path, file);
+        fputs(curNode->name, file);
+        fputc('\n', file);
+
+        char curPath[128] = "";
+        strcpy(curPath, path);
+        strcat(curPath, curNode->name);
+
+        if(strcmp(curNode->name, "/") != 0){
+            strcat(curPath, "/");
+        }
+
+        if(curNode->type == 'D') {
+            curNode = curNode->child;
+
+            while (curNode) {
+                if(curPath[128] == '\0') {
+                    saveHelper(curNode, file, curPath);
+                    curNode = curNode->sibling;
+                } else {
+                    savePath(curNode->parent, file);
+                }
+            }
+        }
+    }
+}
+
+void save(){
+    FILE *file = fopen(pathname, "w");
+
+    if(file != NULL) {
+        saveHelper(root, file, "");
+        fclose(file);
+    } else {
+        printf("Could not open file %s\n", pathname);
+    }
 
 }
+
+void reloadHelper(NODE *parentNode, FILE *file){
+
+}
+
+void clearTree(NODE *curNode){
+    if(curNode){
+        clearTree(curNode->child);
+        if(strcmp(curNode->name, "/") != 0) {
+            removeNode(curNode);
+            clearTree(curNode->sibling);
+        }
+    }
+}
+
+void reload(){
+    FILE *file = fopen(pathname, "r");
+
+    if(file != NULL){
+        clearTree(root);
+    } else {
+        printf("Could not open file %s\n", pathname);
+    }
+
+    cwd = root;
+
+}
+
+int (*fptr[])() = {(int (*)())mkdir, rmdir, ls, cd, pwd, creat, rm, save, reload};
+char *functions[] = {"mkdir", "rmdir", "ls", "cd", "pwd", "creat", "rm", "save", "reload", "\0"};
 
 int main(){
 
@@ -255,24 +373,27 @@ int main(){
 
 
     do{
+        command[0] = '\0';
+        pathname[0] = '\0';
+
         printf("Enter a command: ");
         fgets(line, 128, stdin);
         sscanf(line, "%s%s", command, pathname);
 
-        if(strcmp(command, "mkdir") == 0){
-            mkdir();
-        } else if(strcmp(command, "cd") == 0){
-            cd();
-        } else if(strcmp(command, "ls") == 0){
-            ls();
-        } else if(strcmp(command, "creat") == 0){
-            creat();
-        } else if(strcmp(command, "rm") == 0){
-            rm();
+        int commandFound = 0;
+
+        for(int i = 0; functions[i] != "\0"; i++){
+            if(strcmp(command, functions[i]) == 0){
+
+                fptr[i]();
+                commandFound = 1;
+                break;
+            }
         }
 
-        command[0] = '\0';
-        pathname[0] = '\0';
+        if(!commandFound){
+            printf("Could not find command %s\n", command);
+        }
 
     }while(strcmp(command, "exit"));
 

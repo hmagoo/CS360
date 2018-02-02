@@ -61,7 +61,6 @@ NODE* makeChild(NODE *parent, char *name, char type){
 
         lastChild = thisChild;
         thisChild = thisChild->sibling;
-
     }
 
     NODE* newNode = (NODE *) malloc(sizeof(NODE));
@@ -120,21 +119,125 @@ NODE* getNode(char nodeLocation[64], NODE* startingLocation){
     return startingLocation;
 }
 
-int mkdir(){
+void mkdir(){
     splitLast();
     NODE *workingNode = getNode(dirname, cwd);
-    if(workingNode && workingNode->type == 'D'){
-        makeChild(workingNode, basename,'D');
+    if(workingNode) {
+        if (workingNode->type == 'D') {
+            makeChild(workingNode, basename, 'D');
+        } else {
+            printf("Could not insert folder to %s, it is a file\n", workingNode->name);
+        }
     }
-
-
 }
 
-int cd(){
-    NODE* newNode = getNode(pathname, cwd);
-    if(newNode){
-        cwd = newNode;
+int isEmpty(NODE *node){
+    return node->child == 0;
+}
+
+void rmdir(){
+    NODE *toRemove = getNode(pathname, cwd);
+    if(toRemove){
+        if(toRemove->type == 'D'){
+            rmdir(toRemove);
+        } else {
+            printf("Could not remove %s, it is NOT a directory\n", toRemove->name);
+        }
     }
+}
+
+void creat(){
+    splitLast();
+    NODE *workingNode = getNode(dirname, cwd);
+    if(workingNode) {
+        if (workingNode->type == 'D') {
+            makeChild(workingNode, basename, 'F');
+        } else {
+            printf("Could not insert file to %s, it is a file\n", workingNode->name);
+        }
+    }
+}
+
+NODE* getOlderSibling(NODE *youngerNode){
+    NODE *curNode = youngerNode->parent->child;
+    NODE *lastNode = 0;
+
+    while(curNode && curNode != youngerNode){
+        lastNode = curNode;
+        curNode = curNode->sibling;
+
+    }
+
+    return lastNode;
+}
+
+void removeNode(NODE *toRemove){
+    if(strcmp(toRemove->name, "/") != 0) {
+        if(toRemove != cwd) {
+            NODE *olderSibling = getOlderSibling(toRemove);
+            if (olderSibling) {
+                olderSibling->sibling = toRemove->sibling;
+                free(toRemove);
+            } else {
+                toRemove->parent->child = toRemove->sibling;
+            }
+        } else {
+            printf("Cannot remove %s, it is the current working directory", toRemove);
+        }
+    } else {
+        printf("Unable to remove root");
+    }
+}
+
+void rm(){
+    NODE *toRemove = getNode(pathname, cwd);
+    if(toRemove){
+        if(toRemove->type == 'F'){
+            removeNode(toRemove);
+        } else {
+            printf("Could not remove %s, it is a Directory", toRemove->name);
+        }
+    }
+}
+
+void cd(){
+    if(pathname[0] == '\0'){
+        cwd = root;
+    } else {
+        NODE *newNode = getNode(pathname, cwd);
+        if (newNode) {
+            cwd = newNode;
+        }
+    }
+}
+
+void printNode(NODE *node){
+    printf("%c %s\n", node->type, node->name);
+}
+
+void ls(){
+    if(pathname[0] == '\0'){
+        NODE *cur = cwd->child;
+        while(cur){
+            printNode(cur);
+            cur = cur->sibling;
+        }
+    } else {
+        NODE *cur = getNode(pathname, cwd);
+
+        if(cur) {
+            cur = cur->child;
+            while(cur){
+                printNode(cur);
+                cur = cur->sibling;
+            }
+        }
+
+    }
+}
+
+void pwd(){
+
 }
 
 int main(){
@@ -157,9 +260,15 @@ int main(){
         sscanf(line, "%s%s", command, pathname);
 
         if(strcmp(command, "mkdir") == 0){
-            mkdir(pathname);
+            mkdir();
         } else if(strcmp(command, "cd") == 0){
-            cd(pathname);
+            cd();
+        } else if(strcmp(command, "ls") == 0){
+            ls();
+        } else if(strcmp(command, "creat") == 0){
+            creat();
+        } else if(strcmp(command, "rm") == 0){
+            rm();
         }
 
         command[0] = '\0';
